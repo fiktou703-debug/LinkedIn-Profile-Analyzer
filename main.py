@@ -5,6 +5,13 @@ from collections import Counter
 import nltk
 import spacy
 
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass # dotenv not installed, relying on environment or manual input
+
 # Download NLTK data
 try:
     nltk.download('punkt', quiet=True)
@@ -21,30 +28,43 @@ except OSError:
     st.stop()
 
 # Gemini AI setup
-try:
-    import google.generativeai as genai
-    genai.configure(api_key="AIzaSyCIYTx2zPmnJHc3wN36akGCN1FDMkjPsoA")
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    AI_ENABLED = True
-except:
-    AI_ENABLED = False
+def configure_genai(api_key):
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        return genai.GenerativeModel("gemini-1.5-flash"), True
+    except Exception as e:
+        return None, False
+
+# API Key Handling
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    with st.sidebar:
+        api_key = st.text_input("🔑 Enter Gemini API Key", type="password")
+        st.markdown("[Get API Key](https://aistudio.google.com/app/apikey)")
+
+model = None
+AI_ENABLED = False
+
+if api_key:
+    model, AI_ENABLED = configure_genai(api_key)
 
 # Setup
-st.set_page_config(page_title="LinkedIn Profile Analyzer", page_icon="🧠")
-st.title("🧠 LinkedIn Profile Analyzer")
-st.markdown("### AI-powered career insights with NLP analysis")
+st.set_page_config(page_title="LinkedIn Profile Analyzer", page_icon="🧠", layout="wide")
+st.title("🧠 LinkedIn Psychology & Archetype Analyzer")
+st.markdown("### AI-powered Digital Psychology & Personal SEO Insights")
 
 # Status indicators
 col1, col2, col3 = st.columns(3)
 with col1:
     if AI_ENABLED:
-        st.success("🤖 Gemini AI Enabled")
+        st.success("🤖 Gemini AI Connected")
     else:
-        st.warning("🤖 AI Disabled")
+        st.warning("🤖 AI Disconnected (Add Key)")
 with col2:
-    st.info("🧠 spaCy + NLTK")
+    st.info("🧠 NLP Analysis Active")
 with col3:
-    st.info("📄 PDF Support")
+    st.info("📊 Psychology Engine Ready")
 
 # Input
 input_type = st.radio("Input Method:", ["Paste Text", "Upload PDF", "LinkedIn URL"])
@@ -67,7 +87,7 @@ if input_type == "Upload PDF":
             pdf_reader = PyPDF2.PdfReader(uploaded_file)
             pdf_text = ""
             for page in pdf_reader.pages:
-                pdf_text += page.extract_text() + "\n"
+                pdf_text += page.extract_text() + "\\n"
             profile_text = pdf_text.strip()
             if profile_text:
                 st.success("✅ PDF text extracted successfully!")
@@ -96,12 +116,11 @@ def analyze_profile(text):
     
     # Use NLTK for tokenization and POS tagging
     from nltk.corpus import stopwords
-    from nltk.tokenize import word_tokenize
     
     try:
         stop_words = set(stopwords.words('english'))
     except:
-        stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use', 'that', 'have', 'with', 'this', 'will', 'from', 'they', 'know', 'want', 'been', 'good', 'much', 'some', 'time', 'very', 'when', 'come', 'here', 'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than', 'them', 'well', 'were', 'what', 'your'}
+        stop_words = {'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can'}
     
     # Extract meaningful tokens using spaCy
     meaningful_tokens = [token.lemma_.lower() for token in doc 
@@ -123,7 +142,6 @@ def analyze_profile(text):
     # Prioritize technical terms
     keywords = tech_keywords + other_keywords
     keyword_freq = Counter(keywords)
-    top_keywords = [word.title() for word, _ in keyword_freq.most_common(10)]
     
     # Enhanced skills detection using spaCy entities and patterns
     skills_db = ["python", "java", "javascript", "sql", "react", "aws", "machine learning", "data science", "project management", "leadership", "communication", "teamwork", "agile", "scrum", "docker", "kubernetes"]
@@ -136,7 +154,6 @@ def analyze_profile(text):
         if skill in text_lower:
             matched_skills.append(skill.title())
     
-    # Remove duplicates
     matched_skills = list(set(matched_skills))
     
     # Score calculation
@@ -157,84 +174,88 @@ def analyze_profile(text):
     return keyword_freq, matched_skills, score, tips, roles
 
 # Analysis
-if st.button("🔍 Analyze Profile"):
+if st.button("🔍 Analyze Profile Psychology"):
     if profile_text:
         keyword_freq, skills, score, tips, roles = analyze_profile(profile_text)
         
-        # Results
+        # Original Metrics
         col1, col2, col3 = st.columns(3)
-        with col1: st.metric("Score", f"{score}/100")
-        with col2: st.metric("Skills", len(skills))
-        with col3: st.metric("Words", len(profile_text.split()))
+        with col1: st.metric("Base Profile Score", f"{score}/100")
+        with col2: st.metric("Detected Skills", len(skills))
+        with col3: st.metric("Word Count", len(profile_text.split()))
         
-        # Keywords
-        st.subheader("🔑 Keywords")
-        keywords = [word.title() for word, _ in keyword_freq.most_common(8)]
-        st.write(", ".join(keywords) if keywords else "No technical keywords found")
-        
-        # Skills
-        st.subheader("✅ Skills")
-        st.write(", ".join(skills) if skills else "No specific skills detected")
-        
-        # Career insights
-        st.subheader("🎯 Career Roles")
-        for role in roles: st.write(f"• {role}")
-        if not roles: st.write("• Add more skills for suggestions")
-        
-        # Improvement tips
-        st.subheader("💡 Tips")
-        for tip in tips: st.write(f"• {tip}")
-        if not tips: st.write("• Profile looks good!")
+        st.divider()
         
         # AI insights with Gemini
-        if AI_ENABLED:
-            with st.spinner("Getting Gemini AI insights..."):
+        if AI_ENABLED and model:
+            with st.spinner("🤖 Consulting the Digital Psychologist... Analyzing Archetypes & Trust Signals..."):
                 try:
-                    prompt = f"""Analyze this LinkedIn profile and provide:
-                    1. Top 3 suitable career roles based on skills and experience
-                    2. Specific improvement suggestions for better recruiter visibility
-                    3. Missing skills that would enhance career prospects
-                    4. Industry trends relevant to this profile
-                    
-                    Profile content: {profile_text[:1500]}
-                    Detected skills: {', '.join(skills)}
-                    
-                    Provide actionable, specific advice in a professional tone."""
+                    prompt = f"""
+                    Act as a Digital Psychologist and Personal Branding Expert (like Cialdini meets a LinkedIn Strategist). 
+                    Analyze this LinkedIn profile to reveal hidden psychological signals and personal brand strength.
+
+                    Profile Content:
+                    {profile_text[:3500]}
+
+                    Detected Skills: {', '.join(skills)}
+
+                    Provide a deep psychological analysis with the following structured sections:
+
+                    ### 1. 🎭 Professional Archetype
+                    Identify the user's primary and secondary Brand Archetypes (e.g., The Sage, The Ruler, The Hero, The Creator, The Outlaw, The Magician, etc.).
+                    - **Primary Archetype:** [Name] - [Brief explanation of why]
+                    - **Secondary Archetype:** [Name] - [Brief explanation]
+                    - **Psychological Tone:** Describe the mood of their writing (e.g., Authoritative, Empathetic, Disruptive).
+
+                    ### 2. 🧠 Big 5 Personality Insights (Implied)
+                    Analyze the writing style to infer where they likely stand on the Big 5 traits:
+                    - **Openness:** [High/Medium/Low] - [Evidence from text]
+                    - **Conscientiousness:** [High/Medium/Low] - [Evidence]
+                    - **Extraversion:** [High/Medium/Low] - [Evidence]
+                    - **Agreeableness:** [High/Medium/Low] - [Evidence]
+                    - **Neuroticism:** [Implied Emotional Stability level]
+
+                    ### 3. 🛡️ Trust Signals & Persuasion (Cialdini's Principles)
+                    Evaluate how well the profile builds trust using Robert Cialdini's principles. Give a score (0-10) for each:
+                    - **Authority:** [Score/10] - Do they demonstrate expertise? (e.g., quantified results, prestigious roles).
+                    - **Social Proof:** [Score/10] - Are there mentions of well-known clients, publications, or large numbers?
+                    - **Consistency:** [Score/10] - Does the narrative align with their detailed experience?
+                    - **Liking:** [Score/10] - Is the "About" section personable and relatable?
+
+                    ### 4. 🚀 "A+" Headline & Positioning Audit
+                    - **Headline Grade:** [A/B/C/D]
+                    - **Critique:** Does it follow the 'What I do + Who I do it for + How' formula?
+                    - **Improvement:** Specific rewrite suggestions to make it punchier and more psychologically compelling.
+
+                    ### 5. 💡 Strategic Recommendations
+                    - **Psychology-Based Improvements:** How to tweak the language to better match their target archetype.
+                    - **Missing Trust Signals:** What specific elements (numbers, testmonials, case studies) are missing?
+
+                    Format the output in clean, structured Markdown with emojis.
+                    """
                     
                     response = model.generate_content(prompt)
-                    st.subheader("🤖 Gemini AI Career Insights")
+                    st.markdown("## 🧠 Digital Psychology Analysis")
                     st.write(response.text)
                 except Exception as e:
                     st.error(f"AI analysis failed: {str(e)}")
-                    st.info("💡 Check your internet connection")
+                    st.info("💡 Check your API key and internet connection")
+        elif not AI_ENABLED:
+            st.error("⚠️ Gemini API Key Required for Psychology Analysis")
+            st.info("Add GEMINI_API_KEY to .env or enter it in the sidebar.")
+            
     else:
-        st.warning("Enter profile content")
+        st.warning("Please enter profile content first.")
 
-# Instructions and Sample
-st.markdown("---")
-st.markdown("### 📋 How to Get Your LinkedIn Profile")
-
-with st.expander("📄 PDF Export Method (Recommended)"):
-    st.markdown("""
-    1. Go to your LinkedIn profile
-    2. Click **"More"** button (three dots)
-    3. Select **"Save to PDF"**
-    4. Upload the downloaded PDF file above
-    """)
-
-with st.expander("📝 Manual Copy Method"):
-    st.markdown("""
-    1. Go to your LinkedIn profile
-    2. Copy your About/Summary section
-    3. Copy your Experience descriptions
-    4. Copy your Skills list
-    5. Paste everything in the text area
-    """)
-
-if st.button("📄 Load Sample Profile"):
-    sample = """John Smith - Senior Software Engineer
-5+ years Python, JavaScript, React development. Led team of 5, improved performance 40%.
-Skills: Python, AWS, Machine Learning, Leadership, Project Management
-Built scalable applications, managed CI/CD pipelines."""
-    st.text_area("Sample Profile:", value=sample, height=100)
-    st.info("💡 Copy this sample to test the analyzer!")
+# Instructions
+with st.expander("ℹ️ About Archetypes & Trust Signals"):
+    st.markdown(\"""
+    **Professional Archetypes:**
+    - **The Sage**: Seeks truth (Teachers, Researchers).
+    - **The Ruler**: Seeks control & order (CEOs, Managers).
+    - **The Creator**: Seeks innovation (Designers, Artists).
+    
+    **Trust Signals (Cialdini):**
+    - **Authority**: Showing you are an expert.
+    - **Social Proof**: Showing others trust you.
+    \""")
